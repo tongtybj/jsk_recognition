@@ -4,12 +4,19 @@
   <arg name="debug" default="false" />
 
   <node type="fisheye_gimbal_node" pkg="jsk_perception" name="fisheye_gimbal"  output="screen">
-<!--    <param name="image_topic_name" value="/camera/image_raw" /> -->
+    <param name="image_topic_name" value="/camera/image_raw" /> 
     <param name="k" value="275.0"/>
+<!--    <param name="odom_topic_name" value="/odom_output" /> -->
     <param name="odom_topic_name" value="/dji_sdk/odometry" />
     <param name="debug" value="$(arg debug)" />
     <param name="calib" value="$(arg calib)" />
   </node>
+
+<!--
+  <node type="odom_timestamp_modification.py" pkg="jsk_perception" name="timestamp" output="screen" >
+    <param name="sub_topic_name" value="/dji_sdk/odometry"/>
+  </node>
+-->
 
 <!--
   <node type="image_view" pkg="image_view" name="fisheye_image_view">

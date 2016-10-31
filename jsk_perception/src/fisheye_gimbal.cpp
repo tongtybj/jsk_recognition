@@ -87,7 +87,7 @@ namespace jsk_perception
   {
     ROS_INFO("time:%f", odom_msg.header.stamp.toSec());
     gimbal_ = true;
-    //push(odom_msg);
+    push(odom_msg);
   }
 
   void FisheyeGimbal::push(nav_msgs::Odometry odom_msg)
@@ -118,13 +118,11 @@ namespace jsk_perception
     return odometry_qu_[index];
   }
 
-
   void FisheyeGimbal::rectify(const sensor_msgs::Image::ConstPtr& image_msg)
   {
     cv::Mat distorted = cv_bridge::toCvCopy(image_msg, image_msg->encoding)->image;
 
     if(!gimbal_) return;
-
 
     if(!calib_)
       {
