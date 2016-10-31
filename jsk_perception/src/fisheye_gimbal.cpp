@@ -33,40 +33,30 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *********************************************************************/
 
-#include "jsk_perception/fisheye_to_panorama.h"
-#include <jsk_topic_tools/log_utils.h>
-#include <cv_bridge/cv_bridge.h>
-#include <sensor_msgs/Image.h>
-#include <sensor_msgs/image_encodings.h>
-#include <algorithm>
-#include <math.h> 
-#include <boost/assign.hpp>
+#include "jsk_perception/fisheye_gimbal.h"
 
-
-#define PI 3.141592
 
 namespace jsk_perception
 {
-  void FisheyeToPanorama::onInit()
+  FisheyeGimbal::FisheyeGimbal(ros::NodeHandle nh, ros::NodeHandle nhp): nh_(nh),nhp_(nhp)
   {
-    DiagnosticNodelet::onInit();
+    nhp_.param("debug",debug_, false);
+    nhp_.param("calib",calib_, false);
+    nhp_.param("k", k_, 300.0);
+    nhp_.param("absolute_max_degree",absolute_max_degree_, 110.0);
+    nhp_.param("odom_topic_name", odom_topic_name_, std::string("odom"));
+    nhp_.param("image_topic_name", image_topic_name_, std::string("image"));
 
-    pnh_->param("debug",debug_, false);
-    pnh_->param("calib",calib_, false);
-    pnh_->param("k", k_, 300.0);
-    pnh_->param("absolute_max_degree",absolute_max_degree_, 110.0);
-    pnh_->param("odom_topic_name", odom_topic_name_, std::string("odom"));
+    sub_image_ = nh_.subscribe<sensor_msgs::Image>(image_topic_name_, 1, &FisheyeGimbal::rectify, this);
+    sub_odom_ = nh_.subscribe<nav_msgs::Odometry>(odom_topic_name_, 1, &FisheyeGimbal::odomCallback, this, ros::TransportHints().tcpNoDelay());
 
-    pub_undistorted_image_ = advertise<sensor_msgs::Image>(*pnh_, "output", 1);
+    pub_undistorted_image_ = nh_.advertise<sensor_msgs::Image>("output", 1);
     if(debug_)
-      pub_undistorted_center_image_ = advertise<sensor_msgs::Image>(*pnh_, "debug", 1);
-    sub_odom_ = pnh_->subscribe<nav_msgs::Odometry>(odom_topic_name_, 1, &FisheyeToPanorama::odomCallback,
-                                                   this, ros::TransportHints().tcpNoDelay());
-    srv_ = boost::make_shared <dynamic_reconfigure::Server<Config> > (*pnh_);
+      pub_undistorted_center_image_ = nh_.advertise<sensor_msgs::Image>("debug", 1);
+    srv_ = boost::make_shared <dynamic_reconfigure::Server<Config> > (nhp_);
     dynamic_reconfigure::Server<Config>::CallbackType f =
-      boost::bind (&FisheyeToPanorama::configCallback, this, _1, _2);
+      boost::bind (&FisheyeGimbal::configCallback, this, _1, _2);
     srv_->setCallback (f);
-
 
     absolute_max_radian_ = absolute_max_degree_ * M_PI /180.0;
     scale_ = 0.5;
@@ -74,10 +64,9 @@ namespace jsk_perception
     pitch_ = 0;
     gimbal_ = false;
 
-    onInitPostProcess();
   }
 
-  void FisheyeToPanorama::configCallback(Config &new_config, uint32_t level)
+  void FisheyeGimbal::configCallback(Config &new_config, uint32_t level)
   {
     max_degree_ = new_config.degree;
     scale_ = new_config.scale;
@@ -94,38 +83,48 @@ namespace jsk_perception
       }
   }
 
-  void FisheyeToPanorama::odomCallback(const nav_msgs::OdometryConstPtr& odom_msg)
+  void FisheyeGimbal::odomCallback(nav_msgs::Odometry odom_msg)
   {
+    ROS_INFO("time:%f", odom_msg.header.stamp.toSec());
     gimbal_ = true;
-    tf::Quaternion q(odom_msg->pose.pose.orientation.x, odom_msg->pose.pose.orientation.y,
-                     odom_msg->pose.pose.orientation.z, odom_msg->pose.pose.orientation.w);
-    gimbal_orientation_.setRotation(q);
-    double yaw = 0;
-    gimbal_orientation_.getRPY(roll_, pitch_, yaw);
-    tf::Matrix3x3 basis1, basis2, basis;
-    basis1.setRPY(pitch_, 0 , 0);
-    basis2.setRPY(0, -roll_, 0);
-    basis = (basis1 * basis2).transpose();
-
-    setBasis(basis);
+    //push(odom_msg);
   }
 
-
-  void FisheyeToPanorama::subscribe()
+  void FisheyeGimbal::push(nav_msgs::Odometry odom_msg)
   {
-    sub_image_ = pnh_->subscribe("input", 1, &FisheyeToPanorama::rectify, this);
-    ros::V_string names = boost::assign::list_of("~input");
-    jsk_topic_tools::warnNoRemap(names);
+    boost::lock_guard<boost::mutex> lock(param_mutex_);
+
+    while(odometry_qu_.size() >= QU_SIZE)
+      {
+        odometry_qu_.pop_front();
+      }
+    odometry_qu_.push_back(odom_msg);
   }
 
-  void FisheyeToPanorama::unsubscribe()
+  nav_msgs::Odometry FisheyeGimbal::search(double time_stamp)
   {
-    sub_image_.shutdown();
+    boost::lock_guard<boost::mutex> lock(param_mutex_);
+    float time_diff = 1e6;
+    std::size_t index = 0;
+    for(std::deque<nav_msgs::Odometry>::iterator itr = odometry_qu_.begin(); itr != odometry_qu_.end(); ++itr)
+      {
+        ROS_INFO("image time: %f, odom time: %f", time_stamp, itr->header.stamp.toSec());
+        if(fabs(itr->header.stamp.toSec() - time_stamp) < time_diff)
+          {
+            time_diff = fabs(itr->header.stamp.toSec() - time_stamp);
+            index = std::distance(odometry_qu_.begin(), itr);
+          }
+      }
+    return odometry_qu_[index];
   }
 
-  void FisheyeToPanorama::rectify(const sensor_msgs::Image::ConstPtr& image_msg)
+
+  void FisheyeGimbal::rectify(const sensor_msgs::Image::ConstPtr& image_msg)
   {
     cv::Mat distorted = cv_bridge::toCvCopy(image_msg, image_msg->encoding)->image;
+
+    if(!gimbal_) return;
+
 
     if(!calib_)
       {
@@ -143,7 +142,22 @@ namespace jsk_perception
         int un_center_x = undistorted.cols/2, un_center_y = undistorted.rows/2;
 
         if(!gimbal_)  basis_.setRPY(roll_, pitch_, 0);
-        tf::Matrix3x3 basis = getBasis();
+        //tf::Matrix3x3 basis = getBasis();
+
+        nav_msgs::Odometry odom_msg = search(image_msg->header.stamp.toSec());
+        tf::Quaternion q(odom_msg.pose.pose.orientation.x, odom_msg.pose.pose.orientation.y,
+                         odom_msg.pose.pose.orientation.z, odom_msg.pose.pose.orientation.w);
+
+        ROS_INFO("time diff: %f", image_msg->header.stamp.toSec() - odom_msg.header.stamp.toSec());
+        gimbal_orientation_.setRotation(q);
+        double yaw = 0;
+        gimbal_orientation_.getRPY(roll_, pitch_, yaw);
+        tf::Matrix3x3 basis1, basis2, basis;
+        basis1.setRPY(pitch_, 0 , 0);
+        basis2.setRPY(0, -roll_, 0);
+        basis = (basis1 * basis2).transpose();
+
+        //setBasis(basis);
 
         for(int i = 0; i < undistorted.cols; ++i){
           for(int j = 0; j < undistorted.rows; ++j){
@@ -214,6 +228,3 @@ namespace jsk_perception
   }
 }
 
-
-#include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS (jsk_perception::FisheyeToPanorama, nodelet::Nodelet);

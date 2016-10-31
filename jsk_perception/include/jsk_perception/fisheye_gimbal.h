@@ -34,21 +34,24 @@
  *********************************************************************/
 
 
-#ifndef JSK_PERCEPTION_FISHEYE_TO_PANORAMA_H_
-#define JSK_PERCEPTION_FISHEYE_TO_PANORAMA_H_
+#ifndef JSK_PERCEPTION_FISHEYE_TO_GIMBAL_H_
+#define JSK_PERCEPTION_FISHEYE_TO_GIMBAL_H_
 
-#include <jsk_topic_tools/diagnostic_nodelet.h>
 #include <sensor_msgs/Image.h>
-#include <sensor_msgs/CameraInfo.h>
-
-#include <message_filters/subscriber.h>
-#include <message_filters/synchronizer.h>
-#include <message_filters/sync_policies/approximate_time.h>
-#include <message_filters/pass_through.h>
 #include <dynamic_reconfigure/server.h>
 #include <jsk_perception/FisheyeConfig.h>
 #include <tf/transform_listener.h> /* for vector3 */
 #include <nav_msgs/Odometry.h>
+#include <sensor_msgs/image_encodings.h>
+
+#include <jsk_topic_tools/log_utils.h>
+#include <cv_bridge/cv_bridge.h>
+
+#include <algorithm>
+#include <math.h> 
+#include <boost/assign.hpp>
+
+
 
 #include <opencv2/opencv.hpp>
 #include <boost/version.hpp>
@@ -57,34 +60,50 @@
  #include <boost/thread/lock_guard.hpp>
 #endif
 
+#include <deque>
+
 namespace jsk_perception
 {
-  class FisheyeToPanorama: public jsk_topic_tools::DiagnosticNodelet
+  class FisheyeGimbal
   {
   public:
-    typedef message_filters::sync_policies::ApproximateTime<
-      sensor_msgs::Image,         // image
-      sensor_msgs::CameraInfo        // camera info
-      > SyncPolicy;
+
+    FisheyeGimbal(ros::NodeHandle nh, ros::NodeHandle nhp);
+    ~FisheyeGimbal(){}
+
     typedef jsk_perception::FisheyeConfig Config;
 
-    FisheyeToPanorama(): DiagnosticNodelet("FisheyeToPanorama") {}
-  protected:
+    static const uint8_t QU_SIZE = 10;
+
+  private:
+    void setBasis(tf::Matrix3x3 basis)
+    {
+      boost::lock_guard<boost::mutex> lock(param_mutex_);
+      basis_ = basis;
+    }
+
+    const tf::Matrix3x3 getBasis()
+    {
+      boost::lock_guard<boost::mutex> lock(param_mutex_);
+      return basis_;
+    }
+
+    void push(nav_msgs::Odometry odom_msg);
+    nav_msgs::Odometry search(double time_stamp);
+
+    ros::NodeHandle nh_, nhp_;
+
     boost::shared_ptr<dynamic_reconfigure::Server<Config> > srv_;
     void configCallback(Config &new_config, uint32_t level);
-void odomCallback(const nav_msgs::OdometryConstPtr& odom_msg);
-    virtual void onInit();
-    virtual void subscribe();
-    virtual void unsubscribe();
-    inline double interpolate(double rate, double first, double second){return (1.0 - rate) * first + rate * second;};
-    virtual void rectify(const sensor_msgs::Image::ConstPtr& image_msg);
-    
-    boost::shared_ptr<message_filters::Synchronizer<SyncPolicy> > sync_;
+    void odomCallback(nav_msgs::Odometry odom_msg);
+    void rectify(const sensor_msgs::ImageConstPtr& image_msg);
+
     ros::Subscriber sub_image_;
     ros::Subscriber sub_odom_;
     ros::Publisher pub_undistorted_image_;
     ros::Publisher pub_undistorted_center_image_;
     std::string odom_topic_name_;
+    std::string image_topic_name_;
     float max_degree_;
     float scale_;
     double offset_degree_;
@@ -102,18 +121,9 @@ void odomCallback(const nav_msgs::OdometryConstPtr& odom_msg);
     bool calib_;
     bool debug_;
 
-  private:
-    void setBasis(tf::Matrix3x3 basis)
-    {
-      boost::lock_guard<boost::mutex> lock(param_mutex_);
-      basis_ = basis;
-    }
+    std::deque<nav_msgs::Odometry> odometry_qu_;
 
-    const tf::Matrix3x3 getBasis()
-    {
-      boost::lock_guard<boost::mutex> lock(param_mutex_);
-      return basis_;
-    }
+
   };
 }
 
