@@ -73,9 +73,9 @@ endif()
 # ------------------------------------------------------------------------------------
 
 # download and install sample data
-add_custom_target(install_sample_data ALL COMMAND ${PROJECT_SOURCE_DIR}/scripts/install_sample_data.py)
+#add_custom_target(install_sample_data ALL COMMAND ${PROJECT_SOURCE_DIR}/scripts/install_sample_data.py)
 # download and install trained data
-add_custom_target(install_trained_data ALL COMMAND ${PROJECT_SOURCE_DIR}/scripts/install_trained_data.py)
+#add_custom_target(install_trained_data ALL COMMAND ${PROJECT_SOURCE_DIR}/scripts/install_trained_data.py)
 
 # ------------------------------------------------------------------------------------
 # Catkin setup
