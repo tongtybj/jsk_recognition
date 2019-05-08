@@ -39,7 +39,7 @@ class SSDDataset(chainer.dataset.DatasetMixin):
         self.img_filenames = []
         for name in os.listdir(base_dir):
             # If the file is not an image, ignore the file.
-            if os.path.splitext(name)[1] != '.jpg':
+            if os.path.splitext(name)[1] != '.jpg' and os.path.splitext(name)[1] != '.png' :
                 continue
             self.img_filenames.append(os.path.join(base_dir, name))
 
@@ -53,6 +53,7 @@ class SSDDataset(chainer.dataset.DatasetMixin):
         anno_filename = os.path.splitext(img_filename)[0] + '__labels.json'
 
         with open(anno_filename, 'r') as f:
+            #print f
             anno = json.load(f)
         anno = anno['labels']
 
@@ -181,7 +182,7 @@ if __name__ == '__main__':
     pretrained_model = SSD300(pretrained_model=args.base_model)
 
     # copy from pretrained model
-    model = SSD300(n_fg_class=len(dataset.label_names))
+    model = SSD300(n_fg_class=len(label_names))
     model.extractor.copyparams(pretrained_model.extractor)
     model.multibox.loc.copyparams(pretrained_model.multibox.loc)
 
@@ -195,7 +196,10 @@ if __name__ == '__main__':
 
     train = TransformDataset(
         train, Transform(model.coder, model.insize, model.mean))
-    train_iter = chainer.iterators.MultiprocessIterator(
+
+    #train_iter = chainer.iterators.MultiprocessIterator(
+    #    train, args.batchsize)
+    train_iter = chainer.iterators.SerialIterator(
         train, args.batchsize)
 
     test_iter = chainer.iterators.SerialIterator(
@@ -238,7 +242,39 @@ if __name__ == '__main__':
         extensions.snapshot_object(model, 'model_iter_{.updater.iteration}'),
         trigger=(args.model_iter, 'iteration'))
 
+    # Plot.
+    plot_interval = 0.1, 'epoch'
+    eval_interval = 1, 'epoch'
+    assert extensions.PlotReport.available()
+    trainer.extend(
+        extensions.PlotReport(
+            [
+                'main/loss',
+                'main/roi_loc_loss',
+                'main/roi_cls_loss',
+                'main/roi_mask_loss',
+                'main/rpn_loc_loss',
+                'main/rpn_cls_loss',
+            ],
+            file_name='loss.png',
+            trigger=plot_interval,
+        ),
+        trigger=plot_interval,
+    )
+    trainer.extend(
+        extensions.PlotReport(
+            ['validation/main/map'],
+            file_name='accuracy.png',
+            trigger=plot_interval,
+        ),
+        trigger=eval_interval,
+    )
+
+    trainer.extend(extensions.dump_graph('main/loss'))
+
     if args.resume:
         serializers.load_npz(args.resume, trainer)
 
     trainer.run()
+
+    serializers.save_npz(args.out + '/ssd_trained.npz', trainer)
