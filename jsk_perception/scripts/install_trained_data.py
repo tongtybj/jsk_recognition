@@ -222,6 +222,23 @@ def main():
         md5='47a507934b6bc20f0d9274825b734942',
     )
 
+    # sample/mask_rcnn_drone_tracking
+    download_data(
+        pkg_name=PKG,
+        path='trained_data/2019-04-28-07-04-27_mask_rcnn_drone_tracking_training_result.tar.gz',
+        url='https://drive.google.com/uc?id=1-R4rs-rQ197c9-cB6GUuEM5T8lyNdyuU',
+        md5='3684e72f8ee194e6c002d60eb4278dd4',
+        extract=True,
+    )
+
+    # sample/ssd_drone_tracking
+    download_data(
+        pkg_name=PKG,
+        path='trained_data/2019-04-28-07-04-27_ssd_drone_tracking_training_result.tar.gz',
+        url='https://drive.google.com/uc?id=15wB1bsruwupZ-x9DGxgdOp32ZgmcEtbO',
+        md5='737c06efa7e6e5a4f2957793712614e7',
+        extract=True,
+    )
 
 if __name__ == '__main__':
     main()

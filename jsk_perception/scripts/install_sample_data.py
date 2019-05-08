@@ -56,6 +56,24 @@ def main():
         url='https://drive.google.com/uc?id=0B9P1L--7Wd2vM3hhOTBGNjA1eTQ',
         md5='ff7f6a90090d152e2c43bf5057d4e853',
     )
+    download_data(
+        pkg_name=PKG,
+        path='sample/data/drone_tracking_sample1.MP4',
+        url='https://drive.google.com/uc?id=160h0GTZUGVFL38Bef3qKBsFI7sjwZMW4',
+        md5='cb16ccbf06ecd279918d77329705edd6',
+    )
+    download_data(
+        pkg_name=PKG,
+        path='sample/data/drone_tracking_sample2.MP4',
+        url='https://drive.google.com/uc?id=1Rd8QV9YgGbdHFz-Y93AYd395itJ8zSvH',
+        md5='06ba236e01a75d7a769af623aa44fdff',
+    )
+    download_data(
+        pkg_name=PKG,
+        path='sample/data/drone_tracking_sample3.MP4',
+        url='https://drive.google.com/uc?id=1OitkTpZBWzrae3QKXHDSddPYckM6DrUD',
+        md5='12bec3d3840a8da0a98007af1f079b40',
+    )
 
 
 if __name__ == '__main__':

@@ -1,0 +1,43 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="headless" default="false" />
+  <arg name="video_file" default="$(find jsk_perception)/sample/data/drone_tracking_sample2.MP4" />
+
+  <include file="$(find video_stream_opencv)/launch/camera.launch" >
+    <arg name="video_stream_provider" value="$(arg video_file)" />
+  </include>
+
+  <include file="$(find opencv_apps)/launch/hsv_color_filter.launch" >
+    <arg name="image" value="/camera/image_raw" />
+    <arg name="h_limit_max" value="30" />
+    <arg name="h_limit_min" value="340" />
+    <arg name="s_limit_max" value="250" />
+    <arg name="s_limit_min" value="50" />
+    <arg name="v_limit_max" value="250" />
+    <arg name="v_limit_min" value="50" />
+    <arg name="debug_view" value="false" />
+  </include>
+
+  <include file="$(find opencv_apps)/launch/hough_circles.launch" >
+    <arg name="image" value="/camera/image_raw" />
+    <arg name="max_circle_radius" default="100" />
+    <arg name="debug_view" value="false" />
+  </include>
+
+  <group unless="$(arg headless)">
+    <node name="image_view" pkg="image_view" type="image_view"  clear_params="true">
+      <!--<param name="autosize" value="true" />-->
+      <remap from="image" to="/camera/image_raw" />
+    </node>
+    <node name="image_view2" pkg="image_view" type="image_view"  clear_params="true">
+      <!--<param name="autosize" value="true" />-->
+      <remap from="image" to="/hsv_color_filter/image" />
+    </node>
+    <node name="image_view3" pkg="image_view" type="image_view"  clear_params="true">
+      <!--<param name="autosize" value="true" />-->
+      <remap from="image" to="/hough_circles/image" />
+    </node>
+  </group>
+
+
+</launch>
