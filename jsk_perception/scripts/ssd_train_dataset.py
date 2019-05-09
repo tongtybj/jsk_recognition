@@ -277,4 +277,4 @@ if __name__ == '__main__':
 
     trainer.run()
 
-    serializers.save_npz(args.out + '/ssd_trained.npz', trainer)
+    serializers.save_npz(args.out + '/ssd_trained.npz', model)
