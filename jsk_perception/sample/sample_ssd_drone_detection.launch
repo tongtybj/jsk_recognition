@@ -35,7 +35,7 @@
       gpu: $(arg gpu)
       label_names: [drone]
     </rosparam>
-    <param name="score_thresh" value="0.9" />
+    <param name="score_thresh" value="0.7" />
     <param name="model_path" value="$(arg network_model)" />
   </node>
 
